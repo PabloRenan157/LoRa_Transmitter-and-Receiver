@@ -1,4 +1,4 @@
-// Receptor
+//-------------------------------------Receptor-------------------------------------
 #include <SoftwareSerial.h>
 #include "EBYTE.h"
 
@@ -9,6 +9,7 @@
 #define TX_LoRa 2
 #define AUX_LoRa 6
 
+//Struct de dados de sensores
 struct DATA {
   int16_t accelX, accelY, accelZ;
   float altitude, pressure, temperature,aceleracao;
@@ -63,7 +64,7 @@ void loop() {
     }
   }
 }
-
+//Função que recebe os dados e printa na tela
 bool receiveSensorData() {
   DATA receivedData;
   if (LoRa.GetStruct(&receivedData, sizeof(receivedData))) {
