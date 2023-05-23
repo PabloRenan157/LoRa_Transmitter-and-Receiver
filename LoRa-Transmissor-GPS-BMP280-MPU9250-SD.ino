@@ -1,24 +1,40 @@
 //-------------------------------------Transmissor-------------------------------------
+/*PINOS Arduino MEGA
+ ----Micro SD reader---- 
+ MISO 50   MOSI 51   SCK 52   SS 53  
 
+ ---------LoRa----------
+ RX 2  TX 3   AUX 6  M0 4   M1 5
+
+ --------BMP280---------
+ SCL 21 SDA 20
+
+ -----MPU9250/6500------
+ SCL 21 SDA 20
+
+ ------GY-NEO6MV2-------
+ RX TX
+*/
 //Bibliotecas
-#include <SoftwareSerial.h>
-#include "EBYTE.h"
-#include <Wire.h>
-#include <Adafruit_BMP280.h>
-#include <TinyGPS++.h>
 #include <SD.h>
 #include <SPI.h>
+#include <Wire.h>
+#include "EBYTE.h"
+#include <TinyGPS++.h>
 #include <Adafruit_GFX.h>
+#include <Adafruit_BMP280.h>
+#include <Adafruit_Sensor.h>
 #include <Adafruit_SSD1306.h>
+#include <SoftwareSerial.h>
 
 //Pinos OLED
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 32
 
-//****Pinos para comunicação I2C*****
+// //****Pinos para comunicação I2C*****
 // Pinos SDA e SCL 
-#define OLED_SDA 21
-#define OLED_SCL 22
+#define OLED_SDA 20
+#define OLED_SCL 21
 // Pinos do BMP280
 #define BMP_SDA_PIN 20
 #define BMP_SCL_PIN 21
@@ -47,7 +63,7 @@
 #define pinoSS 53 //Arduino MEGA 53 Arduino Uno 10
 
 // Pino do relé
-#define RELAY_PIN 8
+#define RELAY_PIN 9
 
 // Limite de aceleração para acionar o relé (ajuste conforme necessário)
 #define ACELERACAO_LIMITE 10000 // Em metros por segundo ao quadrado (m/s²)
@@ -55,13 +71,15 @@
 // Inicialize o objeto da tela OLED
 Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
 
+int RXPin = 7;
+int TXPin = 8;
 // Inicialização dos objetos
 Adafruit_BMP280 bmp;
 TinyGPSPlus gps;
 File dataFile;
 SoftwareSerial lora(RX_LoRa, TX_LoRa);
 EBYTE LoRa(&lora, M0_LoRa, M1_LoRa, AUX_LoRa);
-
+SoftwareSerial gpsSerial(RXPin, TXPin);
 
 // Objeto de comunicação serial para o GY-NEO6MV2
 
@@ -121,7 +139,7 @@ void LoRaInit()
     LoRa.SetAddress(1);
     LoRa.SetChannel(23);
     LoRa.SaveParameters(TEMPORARY);
-    //LoRa.PrintParameters();
+    LoRa.PrintParameters();
     LoRa.SetMode(MODE_NORMAL);
 }
 void initSD()
@@ -165,53 +183,38 @@ void initBMP() {
 void loop() 
 {
   if (millis() - LastAck > 80) {
-  // if (receiveAck())
-  // {
       sendSensorData();
       LastAck = millis();
-  // }
-  //Se não houver confirmação recebida por 2 segundos, reenviar os dados
+      if (receiveAck())
+      {
+        Serial.println("Deu boa ACK");
+      }
   }
 }
 //-------------------------------------Função que printa as informações na telinha-------------------------------------
 void DislpayInfo(DATA Oled)
 {
- // Limpe a tela
+ 
   display.clearDisplay();
- // Defina a posição do texto na tela (0, 0)
    display.setCursor(0, 0);
-  // Imprima o texto na tela
   display.println("Send:     |");
-   // Defina a posição do texto na tela (Coluna, Linha) 
    display.setCursor(30, 0);
-     // Imprima o texto na tela
   display.print(Oled.Count);
 
   display.setCursor(65, 0);
-  // Imprima o texto na tela
   display.println("Temp: ");
-   // Defina a posição do texto na tela (Coluna, Linha) 
    display.setCursor(95, 0);
-     // Imprima o texto na tela
   display.print(Oled.temperature);
 
  display.setCursor(0, 10);
-  // Imprima o texto na tela
   display.println("Press:    |");
-   // Defina a posição do texto na tela (Coluna, Linha) 
    display.setCursor(35, 10);
-     // Imprima o texto na tela
   display.print(Oled.pressure);
 
  display.setCursor(65, 10);
-  // Imprima o texto na tela
   display.println("Alt: ");
-   // Defina a posição do texto na tela (Coluna, Linha) 
    display.setCursor(90, 10);
-     // Imprima o texto na tela
   display.print(Oled.altitude);
-
-  // Atualize a tela
   display.display();
 
 }
@@ -230,7 +233,7 @@ void sendSensorData()
   MyData.Count ++;
   delay(100);
  // Abre o arquivo para escrita
-  dataFile = SD.open("dados.txt", FILE_WRITE);
+  dataFile = SD.open("dados5.txt", FILE_WRITE);
 
   if (dataFile) 
   {
@@ -264,20 +267,24 @@ bool receiveAck()
 {
 if (lora.available()) 
   {
-   test = (char)LoRa.GetByte();
-    if(test == 'A')
+   test = LoRa.GetByte();
+    if(LoRa.GetByte() == (int)test)
     {
       Serial.println("Ack received----------------");
+      display.clearDisplay();
+      display.setCursor(0, 20);
+      display.println("Pode Voltar");
+      display.display();
       return true;
     }
   }
-return false;
+  else return false;
 }
 
 //-------------------------------------SENSORES ----------------------------------------
 void readGPS(double& latitude, double& longitude) {
-  while (Serial2.available() > 0) {
-    if (gps.encode(Serial2.read())) {
+  while (gpsSerial.available() > 0) {
+    if (gps.encode(gpsSerial.read())) {
       if (gps.location.isValid()) {
         latitude = gps.location.lat();
         longitude = gps.location.lng();
@@ -287,7 +294,7 @@ void readGPS(double& latitude, double& longitude) {
 }
 void readBMP280(float& altitude, float& pressure, float& temperature) 
 {
-  altitude = bmp.readAltitude(1013.25);
+  altitude = bmp.readAltitude(1013.25)+100;
   pressure = (bmp.readPressure() / 100.0)/1013.25;
   temperature = bmp.readTemperature();
 }
